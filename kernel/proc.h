@@ -90,6 +90,7 @@ struct proc {
   int pid;              // Process ID
   int priority;         // Process priority level (0, 1, or 2)
   int in_queue;         // Track whethedr a process is in the ready queue
+  uint64 queue_time;    // Track how long a process has been in the ready queue with ticks
 
   // wait_lock must be held when using this:
   struct proc *parent; // Parent process

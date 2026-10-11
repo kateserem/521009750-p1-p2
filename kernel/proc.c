@@ -7,6 +7,9 @@
 #include "defs.h"
 
 #include "debug.h" /*include debug.h for logging*/
+#define AGING_THRESHOLD 100 //max amount of ticks for a proccess to be in a queue prior to aging to a higher priority level
+
+extern uint ticks; //need for tracking how long a proccess has been in the ready queue for starvation prevention
 
 struct cpu cpus[NCPU];
 
@@ -95,6 +98,7 @@ enqueue(struct proc *p)
   ready_queues[priority].processes[ready_queues[priority].count] = p;
   ready_queues[priority].count++;
   p->in_queue = 1; //put the process in queue
+  p->queue_time = ticks; //how long the process has been in the ready queue
   
   release(&ready_queues[priority].lock);
 }
@@ -128,6 +132,68 @@ dequeue(int priority)
   release(&ready_queues[priority].lock);
 
   return p;
+}
+
+//Removing a process from its queue
+static void
+remove_from_queue(struct proc *p)
+{
+  int priority = p->priority; //get the priority level
+
+  acquire(&ready_queues[priority].lock); //lock the queue
+
+  //find a process in the queue
+  for (int i = 0; i < ready_queues[priority].count; i++) {
+
+    //if a process is found, remove from the queue
+    if (ready_queues[priority].processes[i] == p) {
+
+      //shift the remaining processes up by one
+      for (int j = i + 1; j < ready_queues[priority].count; j++) {
+        ready_queues[priority].processes[j - 1]= ready_queues[priority].processes[j];
+      }
+
+      //decrement the total num of proccesses in the queue
+      ready_queues[priority].count--;
+
+      //remove last process in the queue
+      ready_queues[priority].processes[ready_queues[priority].count] = 0;
+      
+      p->in_queue = 0; //mark the process as no longer in queue
+
+      release(&ready_queues[priority].lock);
+      return;
+    }
+  }
+
+  release(&ready_queues[priority].lock);
+  panic("process not found in the queue");
+}
+
+// Move a proccess to a higher priority level if its waited too long in queue
+static void
+age_processes(void)
+{
+  struct proc *p;
+
+  //interate through the process table to find processes that have waited too long
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+
+    //if process is runnable, in the queue and has a priority larger than 0
+    if (p->state == RUNNABLE && p->in_queue && p->priority > 0) {
+
+      //check if the process has waited too long
+      if ((uint)(ticks - p->queue_time) >= AGING_THRESHOLD) {
+
+        remove_from_queue(p); //remove the process from its current queue
+        p->priority--; //increase the priority level of the process
+        enqueue(p); //add the process to the ready queue
+      }
+    }
+
+    release(&p->lock);
+  }
 }
 
 // Must be called with interrupts disabled,
@@ -201,6 +267,7 @@ found:
   p->state = USED;
   p->priority = 1; // default priority level
   p->in_queue = 0; // not in ready queue yet
+  p->queue_time = 0; // reset queue time
 
   /*print statement for logging when a process is created and gives it an id number*/
   dprintf(DBG_PROC, DBG_INFO, "process created with pid %d\n", p->pid);
@@ -261,6 +328,7 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->priority = 1; // reset priority level to default
   p->in_queue = 0; // reset queue status to not in queue
+  p->queue_time = 0; // reset queue time
   p->state = UNUSED;
 }
 
@@ -557,6 +625,7 @@ scheduler(void)
     // and wfi.
     intr_on();
     intr_off();
+    age_processes(); //check if any processes have waited too long in the ready queue and need to be aged to a higher priority level
 
     int found = 0;
     for (int priority = 0; priority < NB_PRIORITY_LEVELS; priority++) {
