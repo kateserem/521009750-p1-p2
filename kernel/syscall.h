@@ -23,3 +23,6 @@
 #define SYS_sync   22
 
 #define SYS_debugctl 23
+
+#define SYS_setpriority 24
+#define SYS_getpriority 25

@@ -124,3 +124,43 @@ sys_debugctl(void)
 
   return debugctl(operation, argument);
 }
+
+uint64
+sys_getpriority(void)
+{
+  struct proc *p = myproc();
+
+  acquire(&p->lock); //Locking the process before reading the priority
+  int priority = p->priority;
+  release(&p->lock);
+
+  return priority;
+}
+
+uint64
+sys_setpriority(void)
+{
+  int priority;
+  argint(0, &priority);
+
+  //Ensure valid priority level 
+  if (priority < 0 || priority >= NB_PRIORITY_LEVELS)
+    return -1;
+
+  struct proc *p = myproc();
+
+  acquire(&p->lock);
+
+  //if the new priority is the same as the current one, change is not needed
+  if (p->priority == priority) {
+    release(&p->lock);
+    return 0;
+  }
+
+  p->priority = priority;
+  release(&p->lock);
+
+  yield();  //give back the CPU
+
+  return 0;
+}

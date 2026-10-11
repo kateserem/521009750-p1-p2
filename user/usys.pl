@@ -45,3 +45,6 @@ entry("uptime");
 entry("sync");
 
 entry("debugctl");
+
+entry("setpriority");
+entry("getpriority");

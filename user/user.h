@@ -28,6 +28,10 @@ int sync(void);
 
 uint64 debugctl(int operation, uint64 argument);   /*returning the previous debug setting*/
 
+// Priority Sys Calls
+int setpriority(int priority);
+int getpriority(void);
+
 // ulib.c
 int stat(const char *, struct stat *);
 char *strcpy(char *, const char *);
