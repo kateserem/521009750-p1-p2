@@ -4,20 +4,39 @@
 int
 main(void)
 {
-  //check default priority
-  printf("Default priority: %d\n", getpriority());
+  // //check default priority
+  // printf("Default priority: %d\n", getpriority());
 
-  //change to the highest priority
-  printf("Set priority to 0: %d\n", setpriority(0));
-  printf("Current priority: %d\n", getpriority());
+  // //change to the highest priority
+  // printf("Set priority to 0: %d\n", setpriority(0));
+  // printf("Current priority: %d\n", getpriority());
 
-  //change to the lowest priority
-  printf("Set priority to 2: %d\n", setpriority(2));
-  printf("Current priority: %d\n", getpriority());
+  // //change to the lowest priority
+  // printf("Set priority to 2: %d\n", setpriority(2));
+  // printf("Current priority: %d\n", getpriority());
 
-  //test invalid priority level
-  printf("Set priority to -1: %d\n", setpriority(-1));
-  printf("Current priority: %d\n", getpriority());
+  // //test invalid priority level
+  // printf("Set priority to -1: %d\n", setpriority(-1));
+  // printf("Current priority: %d\n", getpriority());
+
+  //test if a child inherits parent priority level
+  setpriority(2);
+
+  int pid = fork();
+
+  if (pid < 0) {
+  printf("Fork failed\n");
+  } 
+  else if (pid == 0) {
+  //child process
+  printf("Child priority: %d\n", getpriority());
+  exit(0);
+  } 
+  else {
+  //parent process
+  wait(0);
+  printf("Parent priority: %d\n", getpriority());
+  }
 
   exit(0);
 }
