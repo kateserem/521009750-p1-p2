@@ -129,6 +129,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->priority = 1; // default priority level
 
   /*print statement for logging when a process is created and gives it an id number*/
   dprintf(DBG_PROC, DBG_INFO, "process created with pid %d\n", p->pid);
@@ -187,6 +188,7 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->priority = 1; // reset priority level to default
   p->state = UNUSED;
 }
 
@@ -297,6 +299,7 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+  np->priority = p->priority; // inherit priority level from parent
 
   /*log fork of child process listing the parent pid, child pid, and its copied size */
   dprintf(DBG_PROC, DBG_INFO, "parent pid %d forked child pid %d with copied size %lu\n", p->pid, np->pid, np->sz);
