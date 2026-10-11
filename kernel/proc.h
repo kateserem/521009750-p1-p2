@@ -89,6 +89,7 @@ struct proc {
   int xstate;           // Exit status to be returned to parent's wait
   int pid;              // Process ID
   int priority;         // Process priority level (0, 1, or 2)
+  int in_queue;         // Track whethedr a process is in the ready queue
 
   // wait_lock must be held when using this:
   struct proc *parent; // Parent process

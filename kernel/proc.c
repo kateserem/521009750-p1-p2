@@ -12,6 +12,13 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+//the ready queues for each of the priority levels
+struct {
+  struct spinlock lock;             //lock to prevent conflicting changes to queue
+  struct proc *processes[NPROC];    //storing the processes in the queue
+  int count;                        //num of processes in the queue
+} ready_queues[NB_PRIORITY_LEVELS]; //creating a queue for each priority level
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -53,11 +60,74 @@ procinit(void)
 
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+
+  // initializing the ready queues for each priority level
+  for (int i = 0; i < NB_PRIORITY_LEVELS; i++) {
+    initlock(&ready_queues[i].lock, "ready_queue");
+    ready_queues[i].count = 0;
+  }
+
   for (p = proc; p < &proc[NPROC]; p++) {
     initlock(&p->lock, "proc");
     p->state = UNUSED;
     p->kstack = KSTACK((int)(p - proc));
   }
+}
+
+//Add a ready process to its corresponding priority queue
+static void
+enqueue(struct proc *p)
+{
+  int priority = p->priority;
+
+  if (p->state != RUNNABLE || p->in_queue) {
+    panic("invalid enqueue"); 
+  }
+
+  acquire(&ready_queues[priority].lock);
+
+  //ensure the queue is not full before adding a process to the queue
+  if (ready_queues[priority].count >= NPROC) {
+    panic("ready queue full"); //if it is, stop kernel and print error
+  }
+
+  //Add the process to the end of the queue
+  ready_queues[priority].processes[ready_queues[priority].count] = p;
+  ready_queues[priority].count++;
+  p->in_queue = 1; //put the process in queue
+  
+  release(&ready_queues[priority].lock);
+}
+
+//Remove the first process from a priority queue
+static __attribute__((unused)) struct proc *
+dequeue(int priority)
+{
+  acquire(&ready_queues[priority].lock);
+
+  //if the queue is empty, return null
+  if (ready_queues[priority].count == 0) {
+    release(&ready_queues[priority].lock);
+    return 0;
+  }
+
+  //get the first process in queue
+  struct proc *p = ready_queues[priority].processes[0];
+
+  //shift all the remaining process in the queue up one position
+  for (int i = 1; i < ready_queues[priority].count; i++) {
+    ready_queues[priority].processes[i - 1] = ready_queues[priority].processes[i];
+  }
+
+  //decrement the total num of processes in queue
+  ready_queues[priority].count--;
+
+  //remove last process in queue
+  ready_queues[priority].processes[ready_queues[priority].count] = 0;
+
+  release(&ready_queues[priority].lock);
+
+  return p;
 }
 
 // Must be called with interrupts disabled,
@@ -130,6 +200,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->priority = 1; // default priority level
+  p->in_queue = 0; // not in ready queue yet
 
   /*print statement for logging when a process is created and gives it an id number*/
   dprintf(DBG_PROC, DBG_INFO, "process created with pid %d\n", p->pid);
@@ -189,6 +260,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->priority = 1; // reset priority level to default
+  p->in_queue = 0; // reset queue status to not in queue
   p->state = UNUSED;
 }
 
@@ -251,6 +323,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  enqueue(p); //add the process to the ready queue
 
   release(&p->lock);
 }
@@ -328,6 +401,8 @@ kfork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  enqueue(np); //add the child process to the inherited priority queue
+
   release(&np->lock);
 
   return pid;
