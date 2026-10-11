@@ -100,7 +100,7 @@ enqueue(struct proc *p)
 }
 
 //Remove the first process from a priority queue
-static __attribute__((unused)) struct proc *
+static struct proc *
 dequeue(int priority)
 {
   acquire(&ready_queues[priority].lock);
@@ -559,8 +559,19 @@ scheduler(void)
     intr_off();
 
     int found = 0;
-    for (p = proc; p < &proc[NPROC]; p++) {
+    for (int priority = 0; priority < NB_PRIORITY_LEVELS; priority++) {
+      //remove the process from the quueue
+      p = dequeue(priority);
+
+      //if there are no processes in the queue, go to the next priority level
+      if (p == 0) {
+        continue;
+      }
+      
       acquire(&p->lock);
+
+      p->in_queue = 0; //mark the process as no longer in queue
+
       if (p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
@@ -582,6 +593,10 @@ scheduler(void)
         found = 1;
       }
       release(&p->lock);
+
+      if (found) {
+        break; // exit the priority loop if a process was found and run
+      }
     }
     if (found == 0) {
       // nothing to run; stop running on this core until an interrupt.
@@ -624,6 +639,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  enqueue(p); //add the process back to the ready queue
   sched();
   release(&p->lock);
 }
@@ -710,6 +726,7 @@ wakeup(void *chan)
       // go to sleep, also set it back to RUNNING.
       if (p->state == SLEEPING) {
         p->state = RUNNABLE;
+        enqueue(p); //add the process back to the ready queue
       }
     }
     release(&p->lock);
@@ -734,6 +751,7 @@ kkill(int pid)
       if (p->state == SLEEPING) {
         // Wake process from sleep().
         p->state = RUNNABLE;
+        enqueue(p); //add the process back to the ready queue
       }
       /*log when a process is killed and who killed it*/
       dprintf(DBG_PROC, DBG_INFO, "process with pid %d killed process with pid %d\n", killer->pid, p->pid);
