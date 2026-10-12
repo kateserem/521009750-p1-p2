@@ -7,6 +7,8 @@
 #include "defs.h"
 
 #include "debug.h" /*include debug.h for logging*/
+
+
 #define AGING_THRESHOLD 100 //max amount of ticks for a proccess to be in a queue prior to aging to a higher priority level
 
 extern uint ticks; //need for tracking how long a proccess has been in the ready queue for starvation prevention
@@ -186,10 +188,26 @@ age_processes(void)
       //check if the process has waited too long
       if ((uint)(ticks - p->queue_time) >= AGING_THRESHOLD) {
 
-        remove_from_queue(p); //remove the process from its current queue
-        p->priority--; //increase the priority level of the process
-        enqueue(p); //add the process to the ready queue
+        // Save the priority and waiting time before aging
+        int old_priority = p->priority;
+        uint waited = ticks - p->queue_time;
+
+        // show how many ticks the process waited
+        printk("[AGING] PID %d waited %d ticks and needs to age\n", p->pid, waited);
+
+        //remove the process from its current queue
+        remove_from_queue(p);
+
+        //move the process up a priority level
+        p->priority--;
+
+        //print the priority level change
+        printk("[AGING] PID %d aged from priority %d to priority %d\n", p->pid, old_priority, p->priority);
+
+        //add process to the new queue
+        enqueue(p);
       }
+
     }
 
     release(&p->lock);
